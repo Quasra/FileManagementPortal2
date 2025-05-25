@@ -1,0 +1,419 @@
+﻿@{
+    ViewData["Title"] = "Kullanıcı Profili";
+    Layout = "_AdminLayout";
+}
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Profil Bilgileri</h4>
+                </div>
+                <div class="card-body">
+                    <div id="profileResult" class="alert d-none"></div>
+                    <form id="profileForm">
+                        <input type="hidden" id="userId" />
+
+                        <div class="mb-3 row">
+                            <label for="firstName" class="col-sm-3 col-form-label">Ad</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="firstName" name="firstName" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                            <label for="lastName" class="col-sm-3 col-form-label">Soyad</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="lastName" name="lastName" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                            <label for="username" class="col-sm-3 col-form-label">Kullanıcı Adı</label>
+                            <div class="col-sm-9">
+                                <input type="text" class="form-control" id="username" name="username" required>
+                            </div>
+                        </div>
+
+                        <div class="mb-3 row">
+                            <label for="email" class="col-sm-3 col-form-label">E-posta</label>
+                            <div class="col-sm-9">
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="button" id="saveProfileBtn" class="btn btn-primary">
+                                <i class="fa fa-save"></i> Kaydet
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h4>Kullanıcı Bilgileri</h4>
+                </div>
+                <div class="card-body">
+                    <p><strong>Kullanıcı ID:</strong> <span id="displayUserId"></span></p>
+                    <p><strong>Tam Ad:</strong> <span id="displayFullName"></span></p>
+                    <p><strong>Kullanıcı Adı:</strong> <span id="displayUsername"></span></p>
+                    <p><strong>E-posta:</strong> <span id="displayEmail"></span></p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4>Roller</h4>
+                    <button id="addRoleBtn" class="btn btn-sm btn-primary d-none">
+                        <i class="fa fa-plus"></i> Rol Ekle
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="rolesList" class="mb-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Yükleniyor...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="addRoleModal" tabindex="-1" aria-labelledby="addRoleModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addRoleModalLabel">Rol Ekleme</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="roleNameInput" class="form-label">Eklenecek Rol Adı</label>
+                    <input type="text" class="form-control" id="roleNameInput" placeholder="Rol adını girin">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-success" id="confirmAddRoleBtn">Ekle</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<div class="modal fade" id="roleConfirmationModal" tabindex="-1" aria-labelledby="roleConfirmationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="roleConfirmationModalLabel">Rol Kaldırma İşlemi</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <p id="roleConfirmationMessage"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-danger" id="confirmRemoveRoleBtn">Tamam</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            const apiBaseUrl = 'https://localhost:7064/api';
+            let isCurrentUserAdmin = false;
+            let currentUserId = '';
+
+            
+            loadCurrentUser();
+
+            
+            function loadCurrentUser() {
+                const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+                
+                if (!token) {
+                    window.location.href = '/Account/Login';
+                    return;
+                }
+
+                $.ajax({
+                    url: `${apiBaseUrl}/User/current`,
+                    type: 'GET',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    success: function (user) {
+                        if (user) {
+                            currentUserId = user.id;
+                            populateUserData(user);
+                            loadUserRoles(user.id);
+
+                            
+                            checkIfUserIsAdmin(token);
+                        }
+                    },
+                    error: function (xhr) {
+                        console.error("Kullanıcı bilgileri yüklenemedi:", xhr);
+                        showProfileResult("Kullanıcı bilgileri yüklenemedi!", true);
+                    }
+                });
+            }
+
+            
+            function checkIfUserIsAdmin(token) {
+                try {
+                    
+                    const base64Url = token.split('.')[1];
+                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                    }).join(''));
+
+                    const payload = JSON.parse(jsonPayload);
+
+                    
+                    if (payload.role && (payload.role === 'Admin' || payload.role.includes('Admin'))) {
+                        isCurrentUserAdmin = true;
+                        $('#addRoleBtn').removeClass('d-none');
+                    }
+                } catch (e) {
+                    console.error("Token çözümleme hatası:", e);
+                }
+            }
+
+            
+            function populateUserData(user) {
+                $('#userId').val(user.id);
+                $('#firstName').val(user.firstName || '');
+                $('#lastName').val(user.lastName || '');
+                $('#username').val(user.userName || '');
+                $('#email').val(user.email || '');
+
+                
+                $('#displayUserId').text(user.id);
+                $('#displayFullName').text(`${user.firstName || ''} ${user.lastName || ''}`);
+                $('#displayUsername').text(user.userName || '');
+                $('#displayEmail').text(user.email || '');
+            }
+
+              
+        function loadUserRoles(userId) {
+            console.log("loadUserRoles fonksiyonu çağrıldı - userId:", userId);
+
+            const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+            $('#rolesList').html('<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Yükleniyor...</span></div>');
+
+            $.ajax({
+                url: `${apiBaseUrl}/User/${userId}/roles`,
+                type: 'GET',
+                headers: { 'Authorization': 'Bearer ' + token },
+                beforeSend: function() {
+                    console.log("Roller API isteği başlatılıyor...");
+                },
+                success: function (roles) {
+                    console.log("Roller başarıyla yüklendi:", roles);
+                    const rolesContainer = $('#rolesList');
+                    rolesContainer.empty();
+
+                    if (roles && roles.length > 0) {
+                        roles.forEach(function (role) {
+                            let roleHtml = `<div class="badge bg-info text-dark p-2 mb-2 me-2">${role}`;
+
+                            
+                            if (isCurrentUserAdmin) {
+                                roleHtml += `<a href="javascript:void(0)" class="text-danger ms-2" onclick="removeRole('${userId}', '${role}')" title="Rolü Kaldır"><i class="fa fa-times"></i></a>`;
+                            }
+
+                            roleHtml += `</div>`;
+                            rolesContainer.append(roleHtml);
+                        });
+                    } else {
+                        rolesContainer.append('<p class="text-muted">Kullanıcıya atanmış rol bulunmamaktadır.</p>');
+                    }
+                },
+                error: function (xhr, status, error) {
+                    console.error("Roller yüklenemedi - Status:", xhr.status);
+
+                    
+                    if (xhr.status === 403) {
+                        $('#rolesList').html('<p class="text-danger">Bu kullanıcının rollerini görüntüleme yetkiniz yok.</p>');
+                    } else {
+                        $('#rolesList').html('<p class="text-danger">Roller yüklenemedi! Hata: ' + xhr.status + '</p>');
+                    }
+                }
+            });
+        }
+
+            // Profil kaydetme
+            $('#saveProfileBtn').click(function() {
+                const userId = $('#userId').val();
+                const userData = {
+                    id: userId,
+                    firstName: $('#firstName').val(),
+                    lastName: $('#lastName').val(),
+                    username: $('#username').val(),
+                    email: $('#email').val()
+                };
+
+                const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+                $.ajax({
+                    url: `${apiBaseUrl}/User/${userId}`,
+                    type: 'PUT',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    contentType: 'application/json',
+                    data: JSON.stringify(userData),
+                    success: function (response) {
+                        showProfileResult("Profil bilgileri başarıyla güncellendi.", false);
+                        populateUserData(response); // Güncellenmiş verileri yeniden doldur
+                    },
+                    error: function (xhr) {
+                        console.error("Profil güncellenemedi:", xhr);
+                        let msg = "Profil güncellenemedi!";
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            msg = xhr.responseJSON.message;
+                        }
+                        showProfileResult(msg, true);
+                    }
+                });
+            });
+
+            // Rol ekleme butonu
+            $('#addRoleBtn').click(function() {
+                $('#roleNameInput').val('');
+                $('#addRoleModal').modal('show');
+
+                setTimeout(function() {
+                    $('#roleNameInput').focus();
+                }, 500);
+            });
+
+            // Rol ekleme onay butonuna tıklandığında
+            $('#confirmAddRoleBtn').click(function() {
+                const roleName = $('#roleNameInput').val().trim();
+
+                if (!roleName) {
+                    alert("Lütfen bir rol adı girin!");
+                    return;
+                }
+
+                addRole(currentUserId, roleName);
+            });
+
+            // Enter tuşuna basınca rol ekleme
+            $('#roleNameInput').on('keypress', function(e) {
+                if (e.which === 13) {
+                    e.preventDefault();
+                    $('#confirmAddRoleBtn').click();
+                }
+            });
+
+            // Rol ekleme işlemi
+            function addRole(userId, roleName) {
+                const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+                $.ajax({
+                    url: `${apiBaseUrl}/User/${userId}/roles`,
+                    type: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ roleName: roleName }),
+                    success: function (response) {
+                        showProfileResult("Rol başarıyla eklendi.", false);
+                        loadUserRoles(userId); // Rolleri yeniden yükle
+                        $('#addRoleModal').modal('hide');
+                    },
+                    error: function (xhr) {
+                        console.error("Rol eklenemedi:", xhr);
+                        let msg = "Rol eklenemedi!";
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            msg = xhr.responseJSON.message;
+                        }
+                        showProfileResult(msg, true);
+                        $('#addRoleModal').modal('hide');
+                    }
+                });
+            }
+
+            // Rol silme işlemi global fonksiyonu
+            window.removeRole = function(userId, roleName) {
+                $('#roleConfirmationMessage').text(`"${roleName}" rolünü kullanıcıdan kaldırmak istiyor musunuz?`);
+
+                // Tamam butonuna tıklandığında işlem yap
+                $('#confirmRemoveRoleBtn').off('click').on('click', function() {
+                    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+                    $.ajax({
+                        url: `${apiBaseUrl}/User/${userId}/roles/${roleName}`,
+                        type: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        success: function () {
+                            showProfileResult("Rol başarıyla kaldırıldı.", false);
+                            loadUserRoles(userId); // Rolleri yeniden yükle
+                            $('#roleConfirmationModal').modal('hide');
+                        },
+                        error: function (xhr) {
+                            console.error("Rol kaldırılamadı:", xhr);
+                            let msg = "Rol kaldırılamadı!";
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                msg = xhr.responseJSON.message;
+                            }
+                            showProfileResult(msg, true);
+                            $('#roleConfirmationModal').modal('hide');
+                        }
+                    });
+                });
+
+                $('#roleConfirmationModal').modal('show');
+            };
+
+            // Bilgi mesajı gösterme
+            function showProfileResult(msg, isError) {
+                const alertDiv = $('#profileResult');
+                alertDiv.removeClass('d-none alert-success alert-danger');
+                alertDiv.addClass(isError ? 'alert-danger' : 'alert-success');
+                alertDiv.text(msg);
+
+                // 3 saniye sonra mesajı kapat
+                setTimeout(() => { alertDiv.fadeOut(); }, 3000);
+
+                // Fadeout sonrası d-none sınıfını ekle
+                setTimeout(() => { alertDiv.addClass('d-none').fadeIn(0); }, 3500);
+            }
+        });
+    </script>
+    <style>
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            margin-bottom: 1.5rem;
+        }
+
+        .card-header {
+            background-color: #f8f9fa;
+            padding: 0.75rem 1.25rem;
+        }
+
+        .badge {
+            font-size: 0.875rem;
+            padding: 0.35em 0.65em;
+        }
+
+        #profileResult {
+            margin-bottom: 1rem;
+        }
+
+        .form-control:focus {
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+}

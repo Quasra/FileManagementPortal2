@@ -1,0 +1,308 @@
+﻿@{
+    ViewData["Title"] = "Kullanıcı Yönetimi";
+    Layout = "_AdminLayout";
+}
+
+<div class="container mt-4">
+    <h3>Kullanıcılar</h3>
+    <div id="userResult" class="alert d-none"></div>
+    <table class="table table-bordered table-striped align-middle text-center" id="usersTable">
+        <thead class="table-light">
+            <tr>
+                <th>Ad Soyad</th>
+                <th>Kullanıcı Adı</th>
+                <th>Email</th>
+                <th>Roller</th>
+                <th style="width:180px;">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <!-- Rol Kaldırma Onay Modalı -->
+    <div class="modal fade" id="roleConfirmationModal" tabindex="-1" aria-labelledby="roleConfirmationModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="roleConfirmationModalLabel">Rol Kaldırma İşlemi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="roleConfirmationMessage"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-danger" id="confirmRemoveRoleBtn">Tamam</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rol Ekleme Modalı -->
+    <div class="modal fade" id="addRoleModal" tabindex="-1" aria-labelledby="addRoleModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addRoleModalLabel">Rol Ekleme</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="roleNameInput" class="form-label">Eklenecek Rol Adı</label>
+                        <input type="text" class="form-control" id="roleNameInput" placeholder="Rol adını girin">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                    <button type="button" class="btn btn-success" id="confirmAddRoleBtn">Ekle</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            loadUsers();
+
+            // Kullanıcıları yükle
+            function loadUsers() {
+                const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+                $.ajax({
+                    url: 'https://localhost:7064/api/User',
+                    type: 'GET',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    success: function (users) {
+                        // Debug için ilk kullanıcıyı konsola yazdır
+                        if (users && users.length > 0) {
+                            console.log("İlk kullanıcı:", users[0]);
+                        }
+
+                        const tbody = $('#usersTable tbody');
+                        tbody.empty();
+
+                        if (users && users.length) {
+                            users.forEach(function (user) {
+                                const userId = user.id || "";
+                                const firstName = user.firstName || "";
+                                const lastName = user.lastName || "";
+                                const username = user.userName || "";
+                                const email = user.email || "";
+
+                                // Roller ayrı istekle yüklenecek
+                                getUserRoles(userId, function (roles) {
+                                    const rolesHtml = (roles && roles.length)
+                                        ? roles.map(r => `<span class="badge bg-info text-dark me-1">${r}
+                                            <a href="#" onclick="removeUserRole('${userId}','${r}'); return false;" class="text-danger ms-1" title="Rolü Kaldır"><i class="fa fa-times"></i></a></span>`).join('')
+                                        : '<span class="text-muted">-</span>';
+
+                                    const row = `<tr>
+                                        <td>${firstName} ${lastName}</td>
+                                        <td>${username}</td>
+                                        <td>${email}</td>
+                                        <td>
+                                            ${rolesHtml}
+                                            <button class="btn btn-sm btn-outline-success ms-2" onclick="addUserRole('${userId}'); return false;">
+                                                <i class="fa fa-plus"></i>
+                                            </button>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger" onclick="confirmDeleteUser('${userId}')">
+                                                <i class="fa fa-trash"></i> Sil
+                                            </button>
+                                        </td>
+                                    </tr>`;
+                                    tbody.append(row);
+                                });
+                            });
+                        } else {
+                            tbody.append('<tr><td colspan="5" class="text-center">Kullanıcı yok.</td></tr>');
+                        }
+                    },
+                    error: function (xhr) {
+                        console.error("Kullanıcılar getirilirken hata:", xhr);
+                        showUserResult("Kullanıcılar yüklenemedi!", true);
+                    }
+                });
+            }
+
+            // Kullanıcı rollerini getir
+            window.getUserRoles = function (userId, callback) {
+                if (!userId) {
+                    callback([]);
+                    return;
+                }
+
+                const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+                $.ajax({
+                    url: `https://localhost:7064/api/User/${userId}/roles`,
+                    type: 'GET',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    success: callback,
+                    error: function () { callback([]); }
+                });
+            };
+
+            // Kullanıcıyı sil - Modal kullanmadan doğrudan confirm ile
+            window.confirmDeleteUser = function (userId) {
+                if (!userId) {
+                    showUserResult("Geçersiz kullanıcı ID'si!", true);
+                    return;
+                }
+
+                // ID'yi konsola yazdır
+                console.log("Silinecek kullanıcı ID'si:", userId);
+
+                // Kullanıcıya silme onayı sor
+                if (!confirm("Bu kullanıcıyı silmek istediğinize emin misiniz?")) {
+                    return;
+                }
+
+                const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+                // API isteğini doğrudan gönder
+                $.ajax({
+                    url: `https://localhost:7064/api/User/${userId}`,
+                    type: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    success: function (response) {
+                        console.log("Silme başarılı:", response);
+                        showUserResult("Kullanıcı başarıyla silindi.", false);
+                        loadUsers(); // Tabloyu yenile
+                    },
+                    error: function (xhr) {
+                        console.error("Silme hatası:", xhr);
+                        let msg = "Kullanıcı silinemedi!";
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            msg = xhr.responseJSON.message;
+                        }
+                        showUserResult(msg, true);
+                    }
+                });
+            };
+
+            // Kullanıcıya rol ekle - Özel modal ile
+            window.addUserRole = function (userId) {
+                if (!userId) {
+                    showUserResult("Geçersiz kullanıcı ID'si!", true);
+                    return;
+                }
+
+                // Input alanını temizleyelim
+                $('#roleNameInput').val('');
+
+                // Ekle butonuna tıklandığında çalışacak olan fonksiyonu tanımlayalım
+                $('#confirmAddRoleBtn').off('click').on('click', function() {
+                    const roleName = $('#roleNameInput').val().trim();
+
+                    if (!roleName) {
+                        alert("Lütfen bir rol adı girin!");
+                        return;
+                    }
+
+                    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+                    $.ajax({
+                        url: `https://localhost:7064/api/User/${userId}/roles`,
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify({ roleName: roleName }),
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        success: function (response) {
+                            console.log("Rol ekleme başarılı:", response);
+                            showUserResult("Rol başarıyla eklendi.", false);
+                            loadUsers(); // Tabloyu yenile
+                            $('#addRoleModal').modal('hide');
+                        },
+                        error: function (xhr) {
+                            console.error("Rol ekleme hatası:", xhr);
+                            let msg = "Rol eklenemedi!";
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                msg = xhr.responseJSON.message;
+                            }
+                            showUserResult(msg, true);
+                            $('#addRoleModal').modal('hide');
+                        }
+                    });
+                });
+
+                // Enter tuşuna basınca ekle butonuna tıkla
+                $('#roleNameInput').off('keypress').on('keypress', function(e) {
+                    if (e.which === 13) {
+                        e.preventDefault();
+                        $('#confirmAddRoleBtn').click();
+                    }
+                });
+
+                // Modal'i gösterelim ve input'a odaklanalım
+                $('#addRoleModal').modal('show');
+                setTimeout(function() {
+                    $('#roleNameInput').focus();
+                }, 500);
+            };
+
+            // Kullanıcıdan rol kaldır - Özel modal ile onaylama
+            window.removeUserRole = function (userId, roleName) {
+                if (!userId || !roleName) {
+                    showUserResult("Geçersiz kullanıcı ID'si veya rol adı!", true);
+                    return;
+                }
+
+                // Modal'i ayarlayalım ve gösterelim
+                $('#roleConfirmationMessage').text(`"${roleName}" rolünü kullanıcıdan kaldırmak istiyor musunuz?`);
+
+                // Tamam butonuna tıklandığında çalışacak olan fonksiyonu tanımlayalım
+                $('#confirmRemoveRoleBtn').off('click').on('click', function() {
+                    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+                    $.ajax({
+                        url: `https://localhost:7064/api/User/${userId}/roles/${roleName}`,
+                        type: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        success: function (response) {
+                            console.log("Rol kaldırma başarılı:", response);
+                            showUserResult("Rol başarıyla kaldırıldı.", false);
+                            loadUsers(); // Tabloyu yenile
+                            $('#roleConfirmationModal').modal('hide');
+                        },
+                        error: function (xhr) {
+                            console.error("Rol kaldırma hatası:", xhr);
+                            let msg = "Rol kaldırılamadı!";
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                msg = xhr.responseJSON.message;
+                            }
+                            showUserResult(msg, true);
+                            $('#roleConfirmationModal').modal('hide');
+                        }
+                    });
+                });
+
+                // Modal'i gösterelim
+                $('#roleConfirmationModal').modal('show');
+            };
+
+            // Bilgi mesajı gösterme
+            function showUserResult(msg, isError) {
+                const alertDiv = $('#userResult');
+                alertDiv.removeClass('d-none alert-success alert-danger');
+                alertDiv.addClass(isError ? 'alert-danger' : 'alert-success');
+                alertDiv.text(msg).fadeIn();
+
+                setTimeout(() => { alertDiv.fadeOut(); }, 3000);
+            }
+        });
+    </script>
+    <style>
+        .badge {
+            font-size: 85%;
+            margin-right: 5px;
+        }
+
+        #userResult {
+            margin-bottom: 15px;
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+}

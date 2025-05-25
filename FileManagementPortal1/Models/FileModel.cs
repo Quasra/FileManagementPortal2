@@ -9,6 +9,7 @@ namespace FileManagementPortal1.Models
         [Required]
         [StringLength(255)]
         public string FileName { get; set; }
+        
 
         [Required]
         public string ContentType { get; set; }

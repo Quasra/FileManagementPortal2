@@ -4,6 +4,7 @@ using FileManagementPortal1.Models;
 using FileManagementPortal1.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading.Tasks;
@@ -121,6 +122,27 @@ namespace FileManagementPortal1.Controllers
 
             return Ok(new { message = $"'{file.FileName}' adlı dosya başarıyla silindi." });
         }
+        [HttpGet("count")]
+        public async Task<IActionResult> GetTotalFilesCount()
+        {
+            var count = await _fileRepository.CountAsync();
+            return Ok(new { totalFiles = count });
+        }
+        [HttpGet("storage-used")]
+        public async Task<IActionResult> GetStorageUsed()
+        {
+            try
+            {
+                // FileRepository üzerinden toplam dosya boyutunu al
+                long totalSize = await _fileRepository.GetTotalStorageSizeAsync();
+                return Ok(new { usedStorage = totalSize });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message, detail = ex.InnerException?.Message });
+            }
+        }
+
 
 
         private IActionResult HandleError(Exception ex)

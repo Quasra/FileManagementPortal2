@@ -1,0 +1,90 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Klasör Düzenle";
+    var folderId = ViewBag.FolderId;
+}
+
+<div class="container mt-4">
+    <h3>Klasör Düzenle</h3>
+    <div id="editResult" class="alert d-none"></div>
+    <form id="editFolderForm">
+        <div class="form-group">
+            <label for="folderName">Klasör Adı</label>
+            <input type="text" class="form-control" id="folderName" required>
+        </div>
+
+        <div class="form-group mt-3">
+            <label for="folderDescription">Açıklama</label>
+            <input type="text" class="form-control" id="folderDescription" required>
+        </div>
+
+        <input type="hidden" id="folderId" value="@folderId" />
+
+        <button type="button" id="editFolderBtn" class="btn btn-primary mt-3">Kaydet</button>
+        <a href="/Folders/Index" class="btn btn-secondary mt-3">Listeye Dön</a>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            var id = $('#folderId').val();
+            var token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+            // Klasör verisini çek
+            $.ajax({
+                url: 'https://localhost:7064/api/Folders/' + id,
+                type: 'GET',
+                headers: { 'Authorization': 'Bearer ' + token },
+                success: function (folder) {
+                    $('#folderName').val(folder.name);
+                    $('#folderDescription').val(folder.description); // Açıklama alanını doldur
+                },
+                error: function () {
+                    showResult("Klasör detayı yüklenemedi!", true);
+                }
+            });
+
+            // Güncelleme işlemi
+            $('#editFolderBtn').click(function () {
+                var folderName = $('#folderName').val().trim();
+                var folderDescription = $('#folderDescription').val().trim();
+
+                if (!folderName || !folderDescription) {
+                    showResult("Klasör adı ve açıklama boş olamaz!", true);
+                    return;
+                }
+
+                $.ajax({
+                    url: 'https://localhost:7064/api/Folders/' + id,
+                    type: 'PUT',
+                    contentType: 'application/json',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    data: JSON.stringify({
+                        id: parseInt(id),
+                        name: folderName,
+                        description: folderDescription
+                    }),
+                    success: function (res) {
+                        showResult("Klasör güncellendi!", false);
+                    },
+                    error: function (xhr) {
+                        let msg = "Klasör güncellenemedi!";
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            msg = xhr.responseJSON.message;
+                        }
+                        showResult(msg, true);
+                    }
+                });
+            });
+
+            // Sonuç gösterimi
+            function showResult(msg, isError) {
+                var alertDiv = $('#editResult');
+                alertDiv.removeClass('d-none alert-success alert-danger');
+                alertDiv.addClass(isError ? 'alert-danger' : 'alert-success');
+                alertDiv.text(msg).show();
+            }
+        });
+    </script>
+}

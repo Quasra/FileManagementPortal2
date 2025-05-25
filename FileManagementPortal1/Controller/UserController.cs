@@ -10,6 +10,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using AutoMapper;
+using FileManagementPortal1.Repositories;
 
 namespace FileManagementPortal1.Controller
 {
@@ -21,15 +22,19 @@ namespace FileManagementPortal1.Controller
         private readonly UserManager<AppUser> _userManager;
         private readonly RoleManager<AppRole> _roleManager;
         private readonly IMapper _mapper;
+        private readonly ApplicationDbContext _context;
+
 
         public UserController(
-            UserManager<AppUser> userManager,
-            RoleManager<AppRole> roleManager,
-            IMapper mapper)
+     UserManager<AppUser> userManager,
+     RoleManager<AppRole> roleManager,
+     IMapper mapper,
+     ApplicationDbContext context)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _mapper = mapper;
+            _context = context;
         }
 
         [HttpGet]
@@ -100,18 +105,74 @@ namespace FileManagementPortal1.Controller
             if (user == null)
                 return NotFound(new { message = $"User with ID {id} not found" });
 
-            var result = await _userManager.DeleteAsync(user);
+            try
+            {
+                // 1. İlişkili dosyaları kontrol et ve işle
+                var files = _context.Files.Where(f => f.UserId == id).ToList();
+                if (files.Any())
+                {
+                    _context.Files.RemoveRange(files);
+                    await _context.SaveChangesAsync();
+                }
 
-            if (!result.Succeeded)
-                return BadRequest(new { message = "Failed to delete user", errors = result.Errors });
+                // 2. Identity tarafından yönetilen ilişkileri manuel olarak kontrol et
+                // (Entity Framework bunları normalde kendisi yönetir, ancak sorun yaşıyorsak
+                // manuel kontrol edebiliriz)
 
-            return Ok(new { message = $"User {user.UserName} deleted successfully" });
+                // Kullanıcı rollerini temizle
+                var userRoles = await _context.UserRoles.Where(ur => ur.UserId == id).ToListAsync();
+                _context.UserRoles.RemoveRange(userRoles);
+
+                // Kullanıcı taleplerini temizle
+                var userClaims = await _context.UserClaims.Where(uc => uc.UserId == id).ToListAsync();
+                _context.UserClaims.RemoveRange(userClaims);
+
+                // Kullanıcı girişlerini temizle
+                var userLogins = await _context.UserLogins.Where(ul => ul.UserId == id).ToListAsync();
+                _context.UserLogins.RemoveRange(userLogins);
+
+                // Kullanıcı tokenlarını temizle
+                var userTokens = await _context.UserTokens.Where(ut => ut.UserId == id).ToListAsync();
+                _context.UserTokens.RemoveRange(userTokens);
+
+                await _context.SaveChangesAsync();
+
+                // 3. Şimdi kullanıcıyı sil
+                var result = await _userManager.DeleteAsync(user);
+
+                if (!result.Succeeded)
+                {
+                    // Hataları detaylı olarak logla
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    return BadRequest(new { message = "Failed to delete user", errors });
+                }
+
+                return Ok(new { message = $"User {user.UserName} deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                // Hatanın detaylarını logla ve daha fazla bilgi ver
+                return StatusCode(500, new
+                {
+                    message = "An error occurred while deleting the user",
+                    error = ex.Message,
+                    innerError = ex.InnerException?.Message,
+                    stackTrace = ex.StackTrace
+                });
+            }
         }
 
         [HttpGet("{id}/roles")]
-        [Authorize(Roles = "Admin")]
         public async Task<IActionResult> GetUserRoles(string id)
         {
+            // Kullanıcının kendi rollerini görebilmesi için kontrol ekle
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var isAdmin = User.IsInRole("Admin");
+
+            // Sadece admin kullanıcılar veya kullanıcının kendisi erişebilir
+            if (id != currentUserId && !isAdmin)
+                return Forbid();
+
             var user = await _userManager.FindByIdAsync(id);
 
             if (user == null)
@@ -160,5 +221,13 @@ namespace FileManagementPortal1.Controller
 
             return Ok(new { message = $"Removed {user.UserName} from role {role}" });
         }
+        [HttpGet("count")]
+        public async Task<IActionResult> GetUserCount()
+        {
+            var count = await _userManager.Users.CountAsync();
+            return Ok(new { totalUsers = count });
+        }
+
+
     }
 }

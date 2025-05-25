@@ -1,0 +1,92 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Dosya Yükle";
+}
+<div class="container mt-4">
+    <h3>Dosya Yükle</h3>
+    <div id="uploadResult" class="alert d-none"></div>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="folderSelect">Klasör Seç</label>
+            <select class="form-control" id="folderSelect" name="folderId"></select>
+        </div>
+        <div class="form-group">
+            <label for="fileDesc">Açıklama</label>
+            <input type="text" class="form-control" id="fileDesc" name="desc" placeholder="Dosya açıklaması giriniz">
+        </div>
+        <div class="form-group">
+            <label for="fileInput">Dosya Seç</label>
+            <input type="file" class="form-control-file" id="fileInput" name="file">
+        </div>
+        <button type="button" id="uploadBtn" class="btn btn-success">Yükle</button>
+        <a asp-controller="Files" asp-action="Index" class="btn btn-secondary">Dosya Listesine Dön</a>
+        <!-- veya <a href="/Files/Index" class="btn btn-secondary">Dosya Listesine Dön</a> -->
+    </form>
+</div>
+@section Scripts {
+    <script>
+        // Klasörleri yükle ve dropdown'a ekle
+        $(function() {
+            var token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+            $.ajax({
+                url: 'https://localhost:7064/api/Folders',
+                type: 'GET',
+                headers: { 'Authorization': 'Bearer ' + token },
+                success: function(data) {
+                    var select = $('#folderSelect');
+                    select.empty();
+                    if(data && data.length) {
+                        data.forEach(function(folder) {
+                            select.append(`<option value="${folder.id}">${folder.name}</option>`);
+                        });
+                    } else {
+                        select.append('<option value="">Klasör bulunamadı</option>');
+                    }
+                }
+            });
+        });
+
+        $('#uploadBtn').click(function () {
+            var formData = new FormData();
+            var file = $('#fileInput')[0].files[0];
+            var folderId = $('#folderSelect').val();
+            var desc = $('#fileDesc').val();
+            if (!file) {
+                showResult("Lütfen bir dosya seçin!", true);
+                return;
+            }
+            if (!folderId) {
+                showResult("Lütfen bir klasör seçin!", true);
+                return;
+            }
+            formData.append('file', file);
+            formData.append('folderId', folderId);
+            formData.append('description', desc);
+
+            var token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+            $.ajax({
+                url: 'https://localhost:7064/api/Files/upload',
+                type: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: function (res) {
+                    showResult("Dosya başarıyla yüklendi!", false);
+                    $('#uploadForm')[0].reset();
+                },
+                error: function (xhr) {
+                    showResult("Hata: " + (xhr.responseText || "Dosya yüklenemedi!"), true);
+                }
+            });
+        });
+
+        function showResult(msg, isError) {
+            var alertDiv = $('#uploadResult');
+            alertDiv.removeClass('d-none alert-success alert-danger');
+            alertDiv.addClass(isError ? 'alert-danger' : 'alert-success');
+            alertDiv.text(msg);
+            alertDiv.show();
+        }
+    </script>
+}

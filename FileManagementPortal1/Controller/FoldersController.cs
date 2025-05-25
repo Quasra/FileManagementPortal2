@@ -82,12 +82,15 @@ namespace FileManagementPortal1.Controllers
 
             _mapper.Map(folderDto, folder);
 
-            // UpdateAsync Task türünde (void) dönüyor, sonuç alamayız
+            // Güncellenme bilgilerini set et
+            folder.UpdatedDate = DateTime.UtcNow;
+
+
             await _folderRepository.UpdateAsync(folder);
 
-            // Başarılı güncelleme yanıtı
             return Ok(new { success = true, message = "Klasör başarıyla güncellendi." });
         }
+
 
 
 
@@ -100,11 +103,18 @@ namespace FileManagementPortal1.Controllers
             if (folder == null)
                 return NotFound(new { message = "Klasör bulunamadı." });
 
-            // Silme işlemini gerçekleştirin
+            
             await _folderRepository.DeleteAsync(folder);
 
             return Ok(new { message = "Klasör başarıyla silindi." });
         }
 
+
+        [HttpGet("count")]
+        public async Task<IActionResult> GetTotalFoldersCount()
+        {
+            var count = await _folderRepository.CountAsync();
+            return Ok(new { totalFolders = count });
+        }
     }
 }

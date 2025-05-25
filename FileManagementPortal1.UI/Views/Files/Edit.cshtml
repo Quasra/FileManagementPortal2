@@ -1,0 +1,72 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Dosya Düzenle";
+}
+<div class="container mt-4">
+    <h3>Dosya Düzenle</h3>
+    <div id="fileEditResult" class="alert d-none"></div>
+    <form id="editFileForm">
+        <input type="hidden" id="fileId" value="@ViewBag.Id" />
+
+        <div class="form-group mb-3">
+            <label for="fileName">Adı</label>
+            <input type="text" class="form-control" id="fileName">
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="fileDescription">Açıklama</label>
+            <textarea class="form-control" id="fileDescription" rows="3"></textarea>
+        </div>
+
+        <button type="button" id="editFileBtn" class="btn btn-primary">Güncelle</button>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $(function () {
+            var fileId = $('#fileId').val();
+            var token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+
+            // Mevcut dosya verisi yükleniyor
+            $.ajax({
+                url: '/api/Files/' + fileId,
+                type: 'GET',
+                headers: { 'Authorization': 'Bearer ' + token },
+                success: function(file) {
+                    $('#fileName').val(file.name);
+                    $('#fileDescription').val(file.description || '');
+                }
+            });
+
+            $('#editFileBtn').click(function () {
+                var fileName = $('#fileName').val();
+                var fileDescription = $('#fileDescription').val();
+
+                $.ajax({
+                    url: '/api/Files/' + fileId,
+                    type: 'PUT',
+                    contentType: 'application/json',
+                    headers: { 'Authorization': 'Bearer ' + token },
+                    data: JSON.stringify({
+                        Name: fileName,
+                        Description: fileDescription
+                    }),
+                    success: function () {
+                        showResult("Dosya güncellendi!", false);
+                    },
+                    error: function () {
+                        showResult("Dosya güncellenemedi!", true);
+                    }
+                });
+            });
+
+            function showResult(msg, isError) {
+                var alertDiv = $('#fileEditResult');
+                alertDiv.removeClass('d-none alert-success alert-danger');
+                alertDiv.addClass(isError ? 'alert-danger' : 'alert-success');
+                alertDiv.text(msg).show();
+            }
+        });
+    </script>
+}

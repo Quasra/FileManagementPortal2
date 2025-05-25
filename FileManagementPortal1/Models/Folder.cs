@@ -10,6 +10,7 @@ namespace FileManagementPortal1.Models
         public string Name { get; set; }
 
         public string Description { get; set; }
+        
 
         // Navigation property
         public ICollection<FileModel> Files { get; set; }

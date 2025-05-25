@@ -20,7 +20,12 @@ namespace FileManagementPortal1.Repositories
         {
             _environment = environment;
         }
-
+        // FileRepository.cs içinde:
+        public async Task<long> GetTotalStorageSizeAsync()
+        {
+            // Size yerine FileSize kullan
+            return await _context.Files.SumAsync(f => f.FileSize);
+        }
         public async Task<List<FileModel>> GetUserFilesAsync(string userId)
         {
             return await GetQueryable()
@@ -122,8 +127,7 @@ namespace FileManagementPortal1.Repositories
             return true;
         }
 
-
-
+        
         internal void Remove(FileModel file)
         {
             throw new NotImplementedException();

@@ -1,0 +1,73 @@
+﻿@{
+    Layout = "_AdminLayout";
+    ViewData["Title"] = "Klasör Oluştur";
+}
+
+<div class="container mt-4">
+    <h3>Yeni Klasör Oluştur</h3>
+    <div id="createResult" class="alert d-none"></div>
+
+    <form id="createFolderForm">
+        <div class="form-group">
+            <label for="folderName">Klasör Adı</label>
+            <input type="text" class="form-control" id="folderName" required>
+        </div>
+
+        <div class="form-group">
+            <label for="folderDescription">Açıklama</label>
+            <input type="text" class="form-control" id="folderDescription">
+        </div>
+
+        <button type="button" id="createFolderBtn" class="btn btn-primary">Oluştur</button>
+        <a asp-controller="Folders" asp-action="Index" class="btn btn-secondary">Listeye Dön</a>
+        <!-- Alternatif olarak: <a href="/Folders/Index" class="btn btn-secondary">Listeye Dön</a> -->
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        $('#createFolderBtn').click(function () {
+            var folderName = $('#folderName').val().trim();
+            var folderDescription = $('#folderDescription').val().trim();
+
+            if (!folderName) {
+                showResult("Klasör adı boş olamaz!", true);
+                return;
+            }
+
+            var token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+            if (!token) {
+                showResult("Giriş yapmanız gerekiyor!", true);
+                return;
+            }
+
+            $.ajax({
+                url: 'https://localhost:7064/api/Folders',
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'Authorization': 'Bearer ' + token },
+                data: JSON.stringify({
+                    name: folderName,
+                    description: folderDescription
+                }),
+                success: function () {
+                    showResult("Klasör başarıyla oluşturuldu!", false);
+                    $('#folderName').val('');
+                    $('#folderDescription').val('');
+                },
+                error: function (xhr) {
+                    let msg = "Klasör oluşturulamadı!";
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    showResult(msg, true);
+                }
+            });
+        });
+
+        function showResult(msg, isError) {
+            var alertDiv = $('#createResult');
+            alertDiv.removeClass('d-none alert-success alert-danger');
+            alertDiv.addClass(isError ? 'alert-danger' : 'alert-success');
+            alertDiv.text(msg).show();
+        }
+    </script>
+}

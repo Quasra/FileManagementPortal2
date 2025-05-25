@@ -1,0 +1,274 @@
+﻿@{
+    ViewData["Title"] = "Dashboard";
+    Layout = "_AdminLayout";
+}
+
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Dashboard</h1>
+    </div>
+
+    <!-- Giriş Saati -->
+    <div class="row mb-2">
+        <div class="col-12">
+            <div class="alert alert-info py-2 mb-0" style="display: inline-block;">
+                <strong>Giriş Saati: </strong>
+                <span id="girisSaati"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stat Cards Row -->
+    <div class="row mb-4">
+        <!-- Total Files -->
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body d-flex align-items-center">
+                    <div class="me-3 flex-grow-1">
+                        <div class="text-xs text-primary text-uppercase mb-1">Toplam Dosya</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalFiles">0</div>
+                    </div>
+                    <i class="fas fa-file fa-2x text-gray-300"></i>
+                </div>
+            </div>
+        </div>
+        <!-- Total Folders -->
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body d-flex align-items-center">
+                    <div class="me-3 flex-grow-1">
+                        <div class="text-xs text-success text-uppercase mb-1">Toplam Klasörler</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalFolders">0</div>
+                    </div>
+                    <i class="fas fa-folder fa-2x text-gray-300"></i>
+                </div>
+            </div>
+        </div>
+        <!-- Storage Used -->
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body d-flex align-items-center">
+                    <div class="me-3 flex-grow-1">
+                        <div class="text-xs text-info text-uppercase mb-1">Depolama</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="usedStorage">0 MB</div>
+                    </div>
+                    <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                </div>
+            </div>
+        </div>
+        <!-- Total Users -->
+        <div class="col-md-3 mb-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body d-flex align-items-center">
+                    <div class="me-3 flex-grow-1">
+                        <div class="text-xs text-warning text-uppercase mb-1">Toplam Kullanıcılar</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalUsers">0</div>
+                    </div>
+                    <i class="fas fa-users fa-2x text-gray-300"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tables Row -->
+    <div class="row">
+        <!-- Folders Table -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 font-weight-bold text-success">Klasörler</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table align-middle table-bordered mb-0" id="foldersTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Created Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Dinamik olarak doldurulacak -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Eğer sağda Recent Files tablonuz varsa, onu da ekleyebilirsiniz -->
+    </div>
+</div>
+
+<!-- Silme Onay Modalı -->
+<div class="modal fade" id="deleteFolderModal" tabindex="-1" aria-labelledby="deleteFolderModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteFolderModalLabel">Klasörü Sil</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body text-center">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <p class="mb-0">Bu klasörü ve tüm içeriğini silmek istediğinize emin misiniz?</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteFolderBtn">Evet, Sil</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        var folderIdToDelete = null;
+
+        $(document).ready(function () {
+            // Giriş saatini göster
+            var girisSaati = localStorage.getItem('girisSaati');
+            if (!girisSaati) {
+                // Eğer login sırasında set edilmediyse, ilk girişte şimdiki zamanı yaz
+                var now = new Date();
+                girisSaati = now.toLocaleString();
+                localStorage.setItem('girisSaati', girisSaati);
+            }
+            $('#girisSaati').text(girisSaati);
+
+            // Auth kontrolü
+            var token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+            if (!token) {
+                window.location.href = '/Account/Login';
+                return;
+            }
+            $.ajaxSetup({
+                beforeSend: function (xhr) {
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                }
+            });
+
+            // Stat kartlarını doldur
+            loadTotalFiles();
+            loadTotalFolders();
+            loadUsedStorage();
+            loadTotalUsers();
+
+            // Tablo verilerini doldur
+            loadFolders();
+
+            // Silme onayı modalı için event
+            $('#confirmDeleteFolderBtn').on('click', function () {
+                if (folderIdToDelete !== null) {
+                    $.ajax({
+                        url: '/api/Folders/' + folderIdToDelete,
+                        type: 'DELETE',
+                        success: function () {
+                            $('#deleteFolderModal').modal('hide');
+                            alert('Klasör başarıyla silindi.');
+                            location.reload();
+                        },
+                        error: function () {
+                            $('#deleteFolderModal').modal('hide');
+                            alert('Klasör silinirken bir hata oluştu.');
+                        }
+                    });
+                }
+            });
+
+            function loadTotalFiles() {
+                $.ajax({
+                    url: '/api/Files/count',
+                    type: 'GET',
+                    success: function (data) {
+                        $('#totalFiles').text(data.totalFiles ?? 0);
+                    }
+                });
+            }
+
+            function loadTotalFolders() {
+                $.ajax({
+                    url: '/api/Folders/count',
+                    type: 'GET',
+                    success: function (data) {
+                        $('#totalFolders').text(data.totalFolders ?? 0);
+                    }
+                });
+            }
+
+                    function loadUsedStorage() {
+            $.ajax({
+                url: '/api/Files/storage-used',
+                type: 'GET',
+                success: function (data) {
+                    var usedMB = data.usedStorage ? Math.round(data.usedStorage / (1024 * 1024)) : 0;
+                    $('#usedStorage').text(usedMB + ' MB');
+                }
+            });
+        }
+
+                            function loadTotalUsers() {
+            $.ajax({
+                // api/Users/count yerine api/User/count kullanın
+                url: '/api/User/count',
+                type: 'GET',
+                success: function (data) {
+                    $('#totalUsers').text(data.totalUsers ?? 0);
+                },
+                error: function(xhr) {
+                    console.error("Kullanıcı sayısı yüklenemedi:", xhr);
+                    $('#totalUsers').text("0"); // Hata durumunda varsayılan değer
+                }
+            });
+        }
+
+            function loadFolders() {
+                $.ajax({
+                    url: '/api/Folders',
+                    type: 'GET',
+                    success: function (data) {
+                        var tbody = $('#foldersTable tbody');
+                        tbody.empty();
+                        if (data && data.length > 0) {
+                            $.each(data, function (i, folder) {
+                                var row = $('<tr>');
+                                row.append($('<td>').text(folder.name));
+                                row.append($('<td>').text(new Date(folder.createdDate).toLocaleDateString()));
+                                var actionsCell = $('<td>');
+                                actionsCell.append('<a href="/Folders/Details/' + folder.id + '" class="btn btn-sm btn-primary me-1"><i class="fas fa-folder-open"></i></a>');
+                                // Güncellenmiş silme butonu
+                                actionsCell.append('<button class="btn btn-sm btn-danger" onclick="showDeleteFolderModal(' + folder.id + ')"><i class="fas fa-trash"></i></button>');
+                                row.append(actionsCell);
+                                tbody.append(row);
+                            });
+                        } else {
+                            tbody.append('<tr><td colspan="3" class="text-center">No folders found</td></tr>');
+                        }
+                    }
+                });
+            }
+
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                var k = 1024;
+                var sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+                var i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+        });
+
+        // Bootstrap 5 ile çalışır! (Eğer Bootstrap 4 ise, modal açma için $('#deleteFolderModal').modal('show') kullanılır.)
+
+        // Silme modalını gösteren fonksiyon
+        function showDeleteFolderModal(id) {
+            folderIdToDelete = id;
+            // Bootstrap 5
+            var modal = new bootstrap.Modal(document.getElementById('deleteFolderModal'));
+            modal.show();
+            // Bootstrap 4'te ise:
+            // $('#deleteFolderModal').modal('show');
+        }
+
+        // Eski fonksiyonu kaldırıyoruz!
+        // function deleteFolder(id) { ... }
+    </script>
+}
